@@ -22,17 +22,12 @@ package org.apache.hadoop.hdfs.server.namenode.cache;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.InetAddress;
 import java.net.URLDecoder;
+import java.net.UnknownHostException;
 import java.sql.SQLException;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.LongSummaryStatistics;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -40,6 +35,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.core.MediaType;
+
+import io.prometheus.client.CollectorRegistry;
+import io.prometheus.client.Counter;
+import io.prometheus.client.Gauge;
+import io.prometheus.client.Summary;
+import io.prometheus.client.exporter.PushGateway;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hdfs.server.namenode.Constants;
 import org.apache.hadoop.hdfs.server.namenode.Constants.AnalysisState;
@@ -90,6 +91,9 @@ public class SuggestionsEngine {
 
   private long currentAnalysisTxid;
   private long analysisTxidDelta;
+  private String pgwAddress;
+  private String clusterName;
+  private String localhostName;
 
   /** Main constructor. */
   public SuggestionsEngine() {
@@ -686,6 +690,78 @@ public class SuggestionsEngine {
     long e5 = System.currentTimeMillis();
     LOG.info("Writing to embedded MapDB took: {} ms.", (e5 - s5));
     currentState = AnalysisState.sleep;
+
+    // send metrics to pushgateway
+    long s6 = System.currentTimeMillis();
+    CollectorRegistry registry = new CollectorRegistry();
+    String pushGatewayJobName = "nna";
+    for (String metric : cachedValues.keySet()) {
+      String metricName = pushGatewayJobName + "_" + metric;
+      Long metricValue = cachedValues.get(metric);
+
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("metric name: {}, metric value: {}", metricName, metricValue);
+      }
+
+      Map<String,String> groupingKey = new HashMap<>();
+      groupingKey.put("cluster", clusterName);
+      groupingKey.put("instance", localhostName);
+      Gauge gauge = Gauge.build().name(metricName).labelNames("instance", "cluster").help(metricName).register(registry);
+      gauge.labels(localhostName, clusterName).set(metricValue);
+      pushMetricsToPGW(null, null, null, gauge, pushGatewayJobName, groupingKey);
+    }
+    long e6 = System.currentTimeMillis();
+    LOG.info("Send metrics to pushgateway took: {} ms.", (e6 - s6));
+  }
+
+  private void pushMetricsToPGW(Counter counter, Summary summary, io.prometheus.client.Histogram histogram, Gauge gauge, String pushGatewayJobName, Map<String,String> groupingKey) {
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("nna.pushgateway.address: " + pgwAddress);
+    }
+
+    ArrayList<String> addresses = new ArrayList<>();
+    addresses.addAll(Arrays.asList(pgwAddress.split(",")));
+    getPGW(addresses, pushGatewayJobName, counter, summary, histogram, gauge, groupingKey);
+  }
+
+  private void getPGW(List<String> addresses, String pushGatewayJobName, Counter counter, Summary summary, io.prometheus.client.Histogram histogram, Gauge gauge, Map<String,String> groupingKey){
+    int index = new Random().nextInt(addresses.size());
+    String address = addresses.get(index);
+    PushGateway pg = new PushGateway(address);
+    try {
+      if (counter != null)
+        pg.pushAdd(counter, pushGatewayJobName, groupingKey);
+      if (summary != null)
+        pg.pushAdd(summary, pushGatewayJobName, groupingKey);
+      if (histogram != null)
+        pg.pushAdd(histogram, pushGatewayJobName, groupingKey);
+      if (gauge != null)
+        pg.pushAdd(gauge, pushGatewayJobName, groupingKey);
+    } catch (Exception e) {
+      addresses.remove(index);
+      if (addresses.size() == 0) {
+        LOG.warn("No valid servers! Please check pushgateway servers!");
+        return;
+      }
+      getPGW(addresses, pushGatewayJobName, counter, summary, histogram, gauge, groupingKey);
+    }
+  }
+
+  private synchronized String getLocalHostName() {
+    if (localhostName == null) {
+      try {
+        InetAddress localhost = InetAddress.getLocalHost();
+        localhostName = localhost.getHostName() == null ? "" : localhost.getHostName();
+      } catch (UnknownHostException e) {
+        LOG.error("failed to get localhost name", e);
+      }
+    }
+
+    if (localhostName == null) {
+      return "unknown";
+    } else {
+      return localhostName;
+    }
   }
 
   public String getTokens() {
@@ -1371,6 +1447,9 @@ public class SuggestionsEngine {
     this.suggestionsReloadSleepMs = conf.getSuggestionsReloadSleepMs();
     this.currentAnalysisTxid = 0L;
     this.analysisTxidDelta = 0L;
+    this.pgwAddress = conf.getPGWAddress();
+    this.clusterName = conf.getClusterName();
+    this.localhostName = getLocalHostName();
   }
 
   /**

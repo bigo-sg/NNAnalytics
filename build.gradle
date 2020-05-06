@@ -45,7 +45,7 @@ apply plugin: 'net.nemerosa.versioning'
 
 ext {
     mainClass = (properties.get("mainClass") == null) ? "" : "${mainClass}"
-    hadoopVersion = (properties.get("hadoopVersion") == null) ? "2.7.0" : "${hadoopVersion}"
+    hadoopVersion = (properties.get("hadoopVersion") == null) ? "3.1.0" : "${hadoopVersion}"
     println("Building with hadoopVersion: ${hadoopVersion}")
 }
 
@@ -165,6 +165,8 @@ dependencies {
     outboundDep group: 'org.eclipse.collections', name: 'eclipse-collections', version: '10.1.0'
     outboundDep group: 'org.apache.hadoop', name: 'hadoop-common', version: "${hadoopVersion}"
     outboundDep group: 'org.apache.hadoop', name: 'hadoop-hdfs', version: "${hadoopVersion}"
+    outboundDep group: 'io.prometheus', name: 'simpleclient_pushgateway', version: "0.6.0"
+    outboundDep group: 'com.alibaba', name: 'fastjson', version: "1.2.68"
     testCompile group: 'org.apache.hadoop', name: 'hadoop-common', version: "${hadoopVersion}", classifier: 'tests'
     testCompile group: 'org.apache.hadoop', name: 'hadoop-hdfs', version: "${hadoopVersion}", classifier: 'tests'
     testCompile group: 'org.mockito', name: 'mockito-core', version: '1.10.19'
