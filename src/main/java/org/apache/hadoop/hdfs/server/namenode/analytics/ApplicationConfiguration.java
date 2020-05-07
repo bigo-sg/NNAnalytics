@@ -293,10 +293,18 @@ public class ApplicationConfiguration {
             "nna.bootstrap.auto.fetch.namespace", NNA_BOOTSTRAP_AUTO_FETCH_NAMESPACE));
   }
 
-  public String getPGWAddress() {
-    return properties.getProperty("nna.pushgateway.address");
+  /**
+   * Get pushgateway addresses
+   * @return pushgateway addresses, split by comma
+   */
+  public String getPGWAddresses() {
+    return properties.getProperty("nna.pushgateway.addresses");
   }
 
+  /**
+   * Get hdfs cluster name
+   * @return hdfs cluster name
+   */
   public String getClusterName() {
     return properties.getProperty("nna.hdfs.cluster.name");
   }

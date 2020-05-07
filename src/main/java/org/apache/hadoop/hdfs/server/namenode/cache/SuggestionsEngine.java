@@ -1447,7 +1447,7 @@ public class SuggestionsEngine {
     this.suggestionsReloadSleepMs = conf.getSuggestionsReloadSleepMs();
     this.currentAnalysisTxid = 0L;
     this.analysisTxidDelta = 0L;
-    this.pgwAddress = conf.getPGWAddress();
+    this.pgwAddress = conf.getPGWAddresses();
     this.clusterName = conf.getClusterName();
     this.localhostName = getLocalHostName();
   }
