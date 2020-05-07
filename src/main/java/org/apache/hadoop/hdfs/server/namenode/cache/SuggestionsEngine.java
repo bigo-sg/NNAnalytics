@@ -91,7 +91,7 @@ public class SuggestionsEngine {
 
   private long currentAnalysisTxid;
   private long analysisTxidDelta;
-  private String pgwAddress;
+  private String pgwAddresses;
   private String clusterName;
   private String localhostName;
 
@@ -716,11 +716,11 @@ public class SuggestionsEngine {
 
   private void pushMetricsToPGW(Counter counter, Summary summary, io.prometheus.client.Histogram histogram, Gauge gauge, String pushGatewayJobName, Map<String,String> groupingKey) {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("nna.pushgateway.address: " + pgwAddress);
+      LOG.debug("nna.pushgateway.addresses: " + pgwAddresses);
     }
 
     ArrayList<String> addresses = new ArrayList<>();
-    addresses.addAll(Arrays.asList(pgwAddress.split(",")));
+    addresses.addAll(Arrays.asList(pgwAddresses.split(",")));
     getPGW(addresses, pushGatewayJobName, counter, summary, histogram, gauge, groupingKey);
   }
 
@@ -1447,7 +1447,7 @@ public class SuggestionsEngine {
     this.suggestionsReloadSleepMs = conf.getSuggestionsReloadSleepMs();
     this.currentAnalysisTxid = 0L;
     this.analysisTxidDelta = 0L;
-    this.pgwAddress = conf.getPGWAddresses();
+    this.pgwAddresses = conf.getPGWAddresses();
     this.clusterName = conf.getClusterName();
     this.localhostName = getLocalHostName();
   }
