@@ -692,26 +692,30 @@ public class SuggestionsEngine {
     currentState = AnalysisState.sleep;
 
     // send metrics to pushgateway
-    long s6 = System.currentTimeMillis();
-    CollectorRegistry registry = new CollectorRegistry();
-    String pushGatewayJobName = "nna";
-    for (String metric : cachedValues.keySet()) {
-      String metricName = pushGatewayJobName + "_" + metric;
-      Long metricValue = cachedValues.get(metric);
+    try {
+      long s6 = System.currentTimeMillis();
+      CollectorRegistry registry = new CollectorRegistry();
+      String pushGatewayJobName = "nna";
+      for (String metric : cachedValues.keySet()) {
+        String metricName = pushGatewayJobName + "_" + metric;
+        Long metricValue = cachedValues.get(metric);
 
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("metric name: {}, metric value: {}", metricName, metricValue);
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("metric name: {}, metric value: {}", metricName, metricValue);
+        }
+
+        Map<String,String> groupingKey = new HashMap<>();
+        groupingKey.put("cluster", clusterName);
+        groupingKey.put("instance", localhostName);
+        Gauge gauge = Gauge.build().name(metricName).labelNames("instance", "cluster").help(metricName).register(registry);
+        gauge.labels(localhostName, clusterName).set(metricValue);
+        pushMetricsToPGW(null, null, null, gauge, pushGatewayJobName, groupingKey);
       }
-
-      Map<String,String> groupingKey = new HashMap<>();
-      groupingKey.put("cluster", clusterName);
-      groupingKey.put("instance", localhostName);
-      Gauge gauge = Gauge.build().name(metricName).labelNames("instance", "cluster").help(metricName).register(registry);
-      gauge.labels(localhostName, clusterName).set(metricValue);
-      pushMetricsToPGW(null, null, null, gauge, pushGatewayJobName, groupingKey);
+      long e6 = System.currentTimeMillis();
+      LOG.info("Send metrics to pushgateway took: {} ms.", (e6 - s6));
+    } catch (Exception e) {
+      LOG.error("Send metrics to pushgateway failed! ", e);
     }
-    long e6 = System.currentTimeMillis();
-    LOG.info("Send metrics to pushgateway took: {} ms.", (e6 - s6));
   }
 
   private void pushMetricsToPGW(Counter counter, Summary summary, io.prometheus.client.Histogram histogram, Gauge gauge, String pushGatewayJobName, Map<String,String> groupingKey) {
